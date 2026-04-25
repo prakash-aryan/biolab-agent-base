@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: false   # adapter weights are not needed for the fast suite
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -43,13 +45,6 @@ jobs:
           source .venv/bin/activate
           ruff format --check src tests eval
 
-      - name: Fetch starter data
-        run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends unzip
-          bash scripts/fetch_data.sh
-        env:
-          PIP_DISABLE_PIP_VERSION_CHECK: "1"
-
       - name: Pytest (fast tests only)
         run: |
           source .venv/bin/activate
@@ -57,9 +52,10 @@ jobs:
               --durations=10 tests/ eval/
 
   docker-build:
-    # Build the starter image on every PR to catch Dockerfile regressions early.
+    # Building the full PyTorch + CUDA image is slow (~15-20 min) and can
+    # exhaust the 7 GB RAM of free GitHub-hosted runners. Run on demand.
     runs-on: ubuntu-latest
-    needs: lint-and-test
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
