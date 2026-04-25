@@ -1,0 +1,273 @@
+# Public benchmark tasks. The harness (`eval/harness.py`) scores the
+# configured agent against these. All referenced image_ids, doc_ids, and
+# reagent strings correspond to real files produced by
+# `scripts/fetch_data.sh` + `scripts/build_dataset.py`.
+#
+# A private task set with the same schema is used for final evaluation.
+#
+# Task schema:
+#   - id              : stable identifier
+#   - kind            : confluency | rag_retrieval | structured_protocol
+#                       | answer_contains | tool_order | composite
+#   - query           : the natural-language prompt passed to agent.run()
+#   - image_ids       : list[str], resolved under $BIOLAB_DATA_DIR/images/
+#   - scoring         : kind-specific scoring config
+#   - pass_threshold  : float in [0, 1]; score >= threshold counts as a pass
+#   - weight          : relative weight in the final overall score
+
+version: 1
+queries:
+
+  - id: T1_cell_count
+    kind: cell_count
+    query: |
+      You are inspecting row A of a 96-well plate labelled P001. Wells A01
+      through A05 have just been imaged under DAPI microscopy. Segment each
+      image and report the number of cells detected per well in the structured
+      output as `{"cell_count": {"P001_A01": <n>, ...}}`.
+    image_ids: [P001_A01, P001_A02, P001_A03, P001_A04, P001_A05]
+    scoring:
+      # Ground truth is the BBBC002 v1 published per-image mean annotator count.
+      target_cell_count:
+        P001_A01: 14
+        P001_A02: 144
+        P001_A03: 12
+        P001_A04: 56
+        P001_A05: 133
+      rel_tolerance: 0.30
+      abs_tolerance: 10
+    pass_threshold: 0.6
+    weight: 1.0
+
+  - id: T2_retrieve_serial_dilution
+    kind: rag_retrieval
+    query: |
+      Find a protocol from the lab library that performs a serial dilution
+      on the OT-2. Return the protocol id and a one-sentence summary.
+    image_ids: []
+    scoring:
+      expected_doc_ids: ["211a24"]
+      require_all: true
+    pass_threshold: 1.0
+    weight: 1.0
+
+  - id: T3_structured_protocol
+    kind: structured_protocol
+    query: |
+      Design an OT-2 protocol that transfers 50 microlitres of Nuclease-free
+      water from a reservoir in deck slot 1 into every well of a 96-well
+      plate in deck slot 2 using a P300 Single-Channel pipette on the left
+      mount. Return a JSON object in the structured output with keys
+      `title`, `labware`, `pipettes`, and `reagents`.
+    image_ids: []
+    scoring:
+      min_labware: 2
+      min_pipettes: 1
+      min_reagents: 1
+    pass_threshold: 0.75
+    weight: 1.0
+
+  - id: T4_reagent_lookup
+    kind: answer_contains
+    query: |
+      What is the CAS / vendor metadata of Nuclease-free water in the
+      provided reagent catalog? If the catalog does not contain that
+      information, say so explicitly rather than inventing it.
+    image_ids: []
+    scoring:
+      expected_substrings:
+        - "Nuclease-free water"
+      case_sensitive: false
+    pass_threshold: 1.0
+    weight: 0.75
+
+  - id: T5_composite_passage
+    kind: composite
+    query: |
+      Row B of plate P001 was imaged this morning (wells B01 through B05).
+      Segment each well, report the number of cells per well, and if the
+      average count across those wells exceeds 60, retrieve a passaging /
+      trypsinization protocol from the library and return its id. Otherwise,
+      recommend continuing incubation.
+    image_ids: [P001_B01, P001_B02, P001_B03, P001_B04, P001_B05]
+    scoring:
+      parts:
+        - name: cell_count_subtask
+          kind: cell_count
+          target_cell_count:
+            P001_B01: 14
+            P001_B02: 19
+            P001_B03: 104
+            P001_B04: 119
+            P001_B05: 37
+          rel_tolerance: 0.30
+          abs_tolerance: 10
+          weight: 0.5
+        - name: tool_use
+          kind: tool_order
+          required_tools: ["segment_wells", "retrieve_protocol"]
+          ordered: true
+          weight: 0.5
+    pass_threshold: 0.6
+    weight: 1.25
+
+  # ---- Additional tasks (T6-T15). Mix of easy / medium / hard so the
+  # baseline passes most but not all. Every doc_id and reagent string has
+  # been verified against the materialised corpus + catalog.
+
+  - id: T6_cell_count_row_C
+    kind: cell_count
+    query: |
+      Row C of plate P001 has just been imaged. Segment each well and report
+      the number of cells detected per well in the structured output as
+      `{"cell_count": {"P001_C01": <n>, ...}}`.
+    image_ids: [P001_C01, P001_C02, P001_C03, P001_C04, P001_C05]
+    scoring:
+      target_cell_count:
+        P001_C01: 40
+        P001_C02: 8
+        P001_C03: 134
+        P001_C04: 106
+        P001_C05: 44
+      rel_tolerance: 0.30
+      abs_tolerance: 10
+    pass_threshold: 0.6
+    weight: 1.0
+
+  - id: T7_retrieve_pcr
+    kind: rag_retrieval
+    query: |
+      Find a PCR preparation protocol from the lab library. Return its
+      protocol id in the citations.
+    image_ids: []
+    scoring:
+      expected_doc_ids: ["925d07-v3"]
+      require_all: true
+    pass_threshold: 1.0
+    weight: 1.0
+
+  - id: T8_retrieve_elisa
+    kind: rag_retrieval
+    query: |
+      Find a protocol for adding reagents to ELISA plates from the lab
+      library. Return its protocol id in the citations.
+    image_ids: []
+    scoring:
+      expected_doc_ids: ["30450c"]
+      require_all: true
+    pass_threshold: 1.0
+    weight: 1.0
+
+  - id: T9_serial_dilution_design
+    kind: structured_protocol
+    query: |
+      Design an OT-2 protocol to perform a six-point two-fold serial
+      dilution of a stock sample across wells A1 through A6 of a 96-well
+      plate, using 150 microlitres of diluent per well from a P300 Single
+      Channel pipette on the right mount. Return a JSON object in the
+      structured output with keys `title`, `labware`, `pipettes`, `reagents`.
+    image_ids: []
+    scoring:
+      min_labware: 2
+      min_pipettes: 1
+      min_reagents: 1
+    pass_threshold: 0.75
+    weight: 1.0
+
+  - id: T10_reagent_absence
+    kind: answer_contains
+    query: |
+      Is 70 percent ethanol listed in the provided reagent catalog? Answer
+      yes or no, and state explicitly if the item cannot be found rather
+      than inventing vendor or CAS information.
+    image_ids: []
+    scoring:
+      expected_substrings: ["not", "catalog"]
+      case_sensitive: false
+    pass_threshold: 1.0
+    weight: 0.75
+
+  - id: T11_composite_row_D
+    kind: composite
+    query: |
+      Row D of plate P001 was imaged overnight. Segment each well (D01-D05),
+      report per-well cell counts, and if the MAXIMUM count across the row
+      exceeds 100, retrieve a PCR preparation protocol from the library.
+      Otherwise, recommend continuing culture.
+    image_ids: [P001_D01, P001_D02, P001_D03, P001_D04, P001_D05]
+    scoring:
+      parts:
+        - name: cell_count_subtask
+          kind: cell_count
+          target_cell_count:
+            P001_D01: 17
+            P001_D02: 18
+            P001_D03: 59
+            P001_D04: 18
+            P001_D05: 148
+          rel_tolerance: 0.30
+          abs_tolerance: 10
+          weight: 0.6
+        - name: tool_use
+          kind: tool_order
+          required_tools: ["segment_wells", "retrieve_protocol"]
+          ordered: true
+          weight: 0.4
+    pass_threshold: 0.6
+    weight: 1.25
+
+  - id: T12_lookup_PBS
+    kind: answer_contains
+    query: |
+      Look up phosphate buffered saline (PBS) in the reagent catalog.
+      Quote the exact name listed.
+    image_ids: []
+    scoring:
+      expected_substrings: ["phosphate buffered saline", "PBS"]
+      case_sensitive: false
+    pass_threshold: 1.0
+    weight: 0.75
+
+  - id: T13_dna_prep_design
+    kind: structured_protocol
+    query: |
+      Draft an OT-2 protocol that prepares sequencing libraries from 24
+      samples using the Illumina DNA Prep post-tagmentation clean-up steps.
+      Include magnetic bead handling, ethanol washes, and final elution.
+      Return a JSON object in the structured output with `title`, `labware`,
+      `pipettes`, `reagents`.
+    image_ids: []
+    scoring:
+      min_labware: 3
+      min_pipettes: 1
+      min_reagents: 2
+    pass_threshold: 0.75
+    weight: 1.0
+
+  - id: T14_single_well
+    kind: cell_count
+    query: |
+      Well A02 of plate P001 has been imaged. Segment it and report the
+      number of cells in the structured output as
+      `{"cell_count": {"P001_A02": <n>}}`.
+    image_ids: [P001_A02]
+    scoring:
+      target_cell_count:
+        P001_A02: 144
+      rel_tolerance: 0.25
+      abs_tolerance: 15
+    pass_threshold: 1.0
+    weight: 0.5
+
+  - id: T15_retrieve_then_compose
+    kind: tool_order
+    query: |
+      Find the customizable serial-dilution protocol in the library, then
+      draft a new structured protocol that adapts it for a 24-well plate
+      instead of 96-well. Call retrieve_protocol before compose_protocol.
+    image_ids: []
+    scoring:
+      required_tools: ["retrieve_protocol", "compose_protocol"]
+      ordered: true
+    pass_threshold: 1.0
+    weight: 1.0

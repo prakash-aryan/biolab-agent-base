@@ -1,0 +1,22 @@
+# Always checkout/commit with LF line endings so shell scripts run correctly
+# on Git Bash / WSL for Windows users. Docker build contexts are also
+# LF-sensitive.
+
+*            text=auto eol=lf
+*.sh         text eol=lf
+*.py         text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.toml       text eol=lf
+Dockerfile   text eol=lf
+
+# Binary assets
+*.png        binary
+*.jpg        binary
+*.tif        binary
+*.zip        binary
+
+# Git LFS: model weights
+*.safetensors filter=lfs diff=lfs merge=lfs -text
+*.bin         filter=lfs diff=lfs merge=lfs -text
+*.gguf        filter=lfs diff=lfs merge=lfs -text

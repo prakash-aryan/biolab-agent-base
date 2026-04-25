@@ -1,0 +1,153 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biolab_agent_base"
+version = "0.1.0"
+description = "Starter environment for an autonomous laboratory agent: segmentation, RAG, LLM, LoRA."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "Apache-2.0" }
+keywords = ["generative-ai", "agents", "life-engineering", "rag", "mlops"]
+
+dependencies = [
+    # Version floors below reflect the versions the starter image is
+    # verified against. Latest-stable versions on PyPI at the time of
+    # authoring are noted in the comments; uppers are open where the
+    # ecosystem is stable and closed only where a known-breaking major
+    # release is around the corner.
+
+    # --- Web / API ---
+    "fastapi>=0.115",                           # latest 0.136.x
+    "uvicorn[standard]>=0.30",                  # latest 0.46.x
+    "python-multipart>=0.0.9",
+    "pydantic>=2.9,<3",                         # latest 2.13.x
+    "pydantic-settings>=2.5",                   # latest 2.14.x
+    "httpx>=0.27",                              # latest 0.28.x
+    # --- LLM client ---
+    "ollama>=0.4",                              # latest 0.6.x (0.4 is the earliest with tool-calling API)
+    # --- RAG ---
+    "qdrant-client>=1.12",                      # latest 1.17.x
+    "sentence-transformers>=3.1",               # latest 5.x (supports 3.x → 5.x range)
+    "rank-bm25>=0.2.2",
+    # --- Images / segmentation ---
+    "Pillow>=10.4",                             # latest 12.x
+    "opencv-python-headless>=4.10",             # latest 4.13.x
+    "numpy>=1.26,<3",                           # latest 2.x; 3.0 is not out yet
+    "scikit-image>=0.24",                       # latest 0.26.x
+    # --- ML core ---
+    "torch>=2.4,<3",                            # latest 2.11.x
+    "torchvision>=0.19,<1",
+    "transformers>=4.45,<6",                    # latest 5.x; allow 4.45+ through 5.x
+    "accelerate>=1.0",                          # latest 1.13.x
+    "peft>=0.13",                               # latest 0.19.x
+    "bitsandbytes>=0.44",                       # required for the bnb-4bit MedGemma adapter polish
+    "datasets>=3.0",                            # latest 4.x
+    # --- Utilities ---
+    "pyyaml>=6.0",
+    "tqdm>=4.66",
+    "structlog>=24.4",                          # latest 25.x
+    "prometheus-client>=0.21",                  # latest 0.25.x
+    "typer>=0.12",                              # latest 0.24.x
+    "rich>=13.9",                               # latest 15.x
+]
+
+[project.optional-dependencies]
+finetune = [
+    # Unsloth + QLoRA training stack. Heavy, opt-in.
+    # `bitsandbytes` is now a base dep (needed by the adapter polish path),
+    # so it does not appear here.
+    "unsloth>=2025.1.0",          # latest 2026.x
+    "trl>=0.11",                   # latest 1.x
+    "wandb>=0.18",                 # latest 0.26.x
+]
+ui = [
+    "gradio>=5.0",                 # latest 6.x
+]
+eval = [
+    "ragas>=0.2",                  # latest 0.4.x
+    "monai>=1.4",                  # latest 1.5.x
+    "scikit-learn>=1.5",           # latest 1.6.x
+]
+dev = [
+    "pytest>=8.3",                 # latest 9.x (minor-breaking; okay)
+    "pytest-asyncio>=0.24",
+    "pytest-mock>=3.14",
+    "ruff>=0.7",                   # latest 0.15.x
+    "mypy>=1.11",                  # latest 1.13.x
+    "types-PyYAML",
+    "types-requests",
+    "httpx>=0.27",
+]
+all = [
+    "biolab_agent_base[finetune,ui,eval,dev]",
+]
+
+[project.scripts]
+biolab-serve = "biolab_agent.server:main"
+biolab-bench = "biolab_agent.cli:bench"
+biolab-index = "biolab_agent.cli:index_corpus"
+
+[tool.setuptools.packages.find]
+where = ["src", "."]
+include = ["biolab_agent*", "eval*"]
+
+[tool.setuptools.package-data]
+"biolab_agent" = ["py.typed"]
+
+# ----------------------------------------------------------------------------
+# Tool configs
+# ----------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "eval"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "PL", "RUF"]
+ignore = [
+    "E501",
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR2004",
+    "PLW2901",
+    # Unicode in comments (×, -,  - ) is intentional and unambiguous in context.
+    "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004", "S101", "PLC0415"]
+"scripts/*" = ["PLC0415"]  # build scripts lazy-import heavy deps on purpose
+"src/biolab_agent/cli.py" = ["PLC0415"]  # lazy imports in command paths
+"src/biolab_agent/llm/base.py" = ["PLC0415"]  # backend imports gated by env
+"src/biolab_agent/agent/baseline.py" = ["PLC0415"]  # lazy import torch/peft only when adapter path used
+"src/biolab_agent/llm/hf_client.py" = ["PLC0415"]  # lazy imports in chat path
+"src/biolab_agent/finetune/train.py" = ["PLC0415"]  # heavy ML imports inside train fn
+"src/biolab_agent/segmentation/sam_backend.py" = ["PLC0415"]
+"src/biolab_agent/tools/segment.py" = ["PLC0415"]
+"ui/app.py" = ["PLC0415"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_return_any = true
+warn_unused_ignores = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = "src"
+packages = ["biolab_agent"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests", "eval"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+markers = [
+    "gpu: requires CUDA GPU",
+    "ollama: requires running Ollama server",
+    "qdrant: requires running Qdrant server",
+    "slow: slow tests (model download, training)",
+]

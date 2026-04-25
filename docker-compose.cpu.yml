@@ -1,0 +1,16 @@
+# Override for CPU-only hosts  -  use with:
+#   docker compose -f docker-compose.yml -f docker-compose.cpu.yml up
+
+services:
+  app:
+    environment:
+      BIOLAB_DEVICE: cpu
+    deploy:
+      resources:
+        reservations:
+          devices: []
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices: []

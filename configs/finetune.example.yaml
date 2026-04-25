@@ -1,0 +1,41 @@
+# Example config for Unsloth LoRA training. Copy to `configs/finetune.yaml`
+# and customize. Your training script should load this file via PyYAML.
+
+base_model: google/medgemma-4b-it      # HF repo id
+max_seq_length: 2048
+
+dataset:
+  train_path: data/finetune/train.jsonl
+  eval_path:  data/finetune/eval.jsonl
+  instruction_key: instruction
+  response_key: output
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+train:
+  epochs: 3
+  per_device_batch_size: 2
+  grad_accumulation_steps: 4
+  learning_rate: 2.0e-4
+  warmup_ratio: 0.03
+  lr_scheduler: cosine
+  weight_decay: 0.0
+  gradient_checkpointing: true
+  seed: 20260424
+  load_in_4bit: true           # QLoRA; fits MedGemma-4B in ~6-8 GB VRAM
+
+output:
+  adapter_dir: /artifacts/lora-protocol
+  run_name: medgemma-4b-protocol-lora
+  logging_backend: wandb       # wandb | mlflow | tensorboard | null

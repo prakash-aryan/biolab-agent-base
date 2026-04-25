@@ -1,0 +1,104 @@
+# Autonomous Lab Agent  -  starter stack
+#
+# Services:
+#   - app     : the biolab_agent FastAPI service (built from local Dockerfile)
+#   - ollama  : MedGemma-4B inference server
+#   - qdrant  : vector DB for RAG
+#
+# GPU usage:
+#   - `app`    : optional GPU (for EfficientSAM3 and Unsloth fine-tuning)
+#   - `ollama` : requests the first GPU; falls back to CPU if NVIDIA runtime not present
+#
+# Override to CPU-only by unsetting the `deploy` blocks or using
+#   docker compose -f docker-compose.yml -f docker-compose.cpu.yml up
+#
+# Extend as needed; keep the service names stable so the harness can reach
+# ollama at ${OLLAMA_HOST} and qdrant at ${QDRANT_URL}.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: merabro/biolab-agent-base:latest
+    container_name: biolab_agent_app
+    depends_on:
+      ollama:
+        condition: service_started
+      qdrant:
+        condition: service_started
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      QDRANT_URL: http://qdrant:6333
+      BIOLAB_DATA_DIR: /data
+      BIOLAB_ARTIFACT_DIR: /artifacts
+      BIOLAB_LLM_MODEL: ${BIOLAB_LLM_MODEL:-medgemma:4b}
+      BIOLAB_EMBED_MODEL: ${BIOLAB_EMBED_MODEL:-nomic-embed-text}
+      BIOLAB_DEVICE: ${BIOLAB_DEVICE:-cuda}
+      BIOLAB_LORA_ADAPTER: ${BIOLAB_LORA_ADAPTER:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      HF_HOME: /artifacts/hf
+    ports:
+      - "8000:8000"   # FastAPI
+      - "7860:7860"   # Gradio UI (optional, user-exposed)
+    volumes:
+      - ./data:/data:ro
+      - ./artifacts:/artifacts
+      - ./src:/app/src            # mounted for iterative dev; remove for prod image
+      - ./eval:/app/eval
+      - ./configs:/app/configs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: biolab_agent_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: "30m"
+      OLLAMA_NUM_PARALLEL: "2"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: biolab_agent_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      QDRANT__LOG_LEVEL: INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:6333/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  ollama_models:
+    name: biolab_agent_ollama_models
+  qdrant_storage:
+    name: biolab_agent_qdrant_storage

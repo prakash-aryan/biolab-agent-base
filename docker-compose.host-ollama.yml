@@ -1,0 +1,19 @@
+# Override: route the app at a host-side Ollama (already running on 11434)
+# instead of the bundled `ollama` service, and reach Qdrant via 127.0.0.1
+# rather than the compose service name.
+#
+# The app uses `network_mode: host` so that 127.0.0.1:11434 inside the
+# container resolves to the host Ollama listener.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.host-ollama.yml up -d --no-deps qdrant app
+
+services:
+  app:
+    network_mode: host
+    environment:
+      OLLAMA_HOST: http://127.0.0.1:11434
+      QDRANT_URL: http://127.0.0.1:6333
+    depends_on:
+      qdrant:
+        condition: service_started
