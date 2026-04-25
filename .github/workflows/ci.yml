@@ -68,11 +68,11 @@ jobs:
           context: .
           push: false
           load: true
-          tags: merabro/biolab-agent-base:ci
+          tags: biolab-agent-base:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Smoke-test the image
         run: |
-          docker run --rm merabro/biolab-agent-base:ci \
+          docker run --rm biolab-agent-base:ci \
               python -c "import biolab_agent; print(biolab_agent.__version__)"

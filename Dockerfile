@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1.7
-# Base image for the autonomous lab agent starter.
-# Shipped as merabro/biolab-agent-base:latest.
+# Image for the autonomous lab agent stack.
 #
 # Built on top of pytorch/pytorch which ships Python + torch + CUDA
 # pre-installed (no 3+ GB of nvidia-* wheel downloads during build).
+# `docker compose build` produces a local `biolab-agent-base:latest`
+# image; this image is NOT published to Docker Hub.
 
 ARG PYTORCH_TAG=2.4.1-cuda12.4-cudnn9
 

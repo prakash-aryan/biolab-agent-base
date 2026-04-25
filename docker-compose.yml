@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: merabro/biolab-agent-base:latest
+    image: biolab-agent-base:latest
     container_name: biolab_agent_app
     depends_on:
       ollama:
